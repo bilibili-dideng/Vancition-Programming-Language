@@ -1,4 +1,0 @@
-func main() {
-    # 666
-    System.print("666")
-}

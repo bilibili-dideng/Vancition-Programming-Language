@@ -20,10 +20,10 @@ Vanction 是基于 Python 的解释器，无需额外安装。只需确保系统
 ### 运行程序
 
 ```bash
-# 运行 Vanction 源文件
+| 运行 Vanction 源文件
 python vanction.py examples/hello.va
 
-# 启动交互式解释器
+| 启动交互式解释器
 python vanction.py --repl
 ```
 
@@ -59,7 +59,7 @@ func main() {
 
 ```Vanction
 func main() {
-    # if-else 条件语句
+    | if-else 条件语句
     age = 18
     if age >= 18 {
         System.print("You are an adult")
@@ -67,19 +67,18 @@ func main() {
         System.print("You are a minor")
     }
     
-    # else-if 语句（使用新的连字符语法）
     score = 85
-    if score >= 90 {
+    if (score >= 90) {
         System.print("Grade: A")
-    } else-if score >= 80 {
+    } else-if (score >= 80) {
         System.print("Grade: B")
-    } else-if score >= 70 {
+    } else-if (score >= 70) {
         System.print("Grade: C")
     } else {
         System.print("Grade: F")
     }
     
-    # while 循环
+    | while 循环
     counter = 0
     while counter < 5 {
         System.print("Counter:", counter)
@@ -118,49 +117,12 @@ func main() {
 
 ### 内置函数
 
-- `System.print(...)`: 打印输出，支持多个参数
+- `System.print(...)`: 打印输出，支持多个参数 "message","end"
 - `len(string)`: 获取字符串长度
 - `str(value)`: 转换为字符串
 - `int(value)`: 转换为整数
 - `float(value)`: 转换为浮点数
-
-## 文件结构
-
-```
-Vanction-Language/
-├── lexer.py          # 词法分析器
-├── parser.py         # 语法分析器
-├── interpreter.py    # 解释器
-├── vanction.py       # 主程序
-├── examples/         # 示例程序
-│   ├── hello.va
-│   ├── variables.va
-│   ├── functions.va
-│   └── control_flow.va
-└── README.md         # 本文档
-```
-
-## 交互式使用
-
-启动 REPL 模式：
-
-```bash
-python vanction.py --repl
-```
-
-在 REPL 中可以直接输入表达式或语句：
-
-```
-vanction> System.print("Hello from REPL!")
-Hello from REPL!
-
-vanction> 5 + 3
-8
-
-vanction> message = "Vanction is awesome!"
-vanction> System.print(message)
-Vanction is awesome!
-```
+- ‘System.input(...)’
 
 ## 扩展功能
 
