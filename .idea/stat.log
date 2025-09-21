@@ -346,3 +346,12 @@
 {"ts":1758447542718,"action":"IDE_ACTIVATED"}
 {"ts":1758447565797,"action":"IDE_DEACTIVATED"}
 {"ts":1758447574273,"action":"IDE_ACTIVATED"}
+{"ts":1758447633474,"action":"IDE_DEACTIVATED"}
+{"ts":1758447635154,"action":"IDE_ACTIVATED"}
+{"ts":1758447637511,"action":"IDE_DEACTIVATED"}
+{"ts":1758447740797,"action":"IDE_ACTIVATED"}
+{"ts":1758447771467,"action":"FILE_CLOSED","file":"/Publish_to_GitHub.bat","tags":{"FILE_LINE_OF_CODE":"29"}}
+{"ts":1758447771467,"action":"FILE_OPENED","file":"/.gitignore","tags":{"FILE_LINE_OF_CODE":"6"}}
+{"ts":1758447779725,"action":"FILE_CLOSED","file":"/.gitignore","tags":{"FILE_LINE_OF_CODE":"6"}}
+{"ts":1758447779725,"action":"FILE_OPENED","file":"/Publish_to_GitHub.bat","tags":{"FILE_LINE_OF_CODE":"29"}}
+{"ts":1758447788412,"action":"PROJECT_CLOSED","tags":{"PROJECT_NAME":"Vanction-Langauege"}}
