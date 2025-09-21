@@ -644,8 +644,23 @@ class Interpreter:
         """REPL mode: directly execute top-level statements, no main function required"""
         self.current_file = filename
         
-        # In REPL mode, directly execute statements in current program
-        # Don't cache function definitions, execute content in current AST each time
+        # First try to execute top-level statements if they exist
+        if hasattr(program, 'top_level_statements') and program.top_level_statements:
+            try:
+                for stmt in program.top_level_statements:
+                    self.execute_statement(stmt, self.global_env)
+                return True
+            except VanctionRuntimeError as e:
+                if not e.file:
+                    e.file = filename
+                self.print_runtime_error(e)
+                return False
+            except Exception as e:
+                error = VanctionRuntimeError(f"Runtime error: {str(e)}", filename)
+                self.print_runtime_error(error)
+                return False
+        
+        # If no top-level statements, try to execute functions as before
         try:
             # Traverse all functions in current program, find main function or parameterless function
             for func in program.functions:
@@ -813,10 +828,9 @@ class Interpreter:
             # Catch Vanction exceptions (user-defined exceptions)
             if statement.catch_body:
                 # Check exception type filtering (if exception type is specified)
-                if statement.exception_type:
-                    if e.exception_type != statement.exception_type:
-                        # Type mismatch, re-throw exception
-                        raise
+                if statement.exception_type and e.exception_type != statement.exception_type:
+                    # Type mismatch, re-throw exception
+                    raise
                 
                 # Create new environment to handle exception variable
                 catch_env = Environment(parent=env)
@@ -835,20 +849,26 @@ class Interpreter:
             # Catch Vanction runtime errors (like division by zero, array out of bounds, etc.)
             if statement.catch_body:
                 # Check exception type filtering
+                exception_matches = True
                 if statement.exception_type:
                     # Get exception class name as type
                     actual_type = type(e).__name__
                     if actual_type != statement.exception_type:
                         # Type mismatch, re-throw exception
+                        exception_matches = False
                         raise
                 
                 # Create new environment to handle exception variable
                 catch_env = Environment(parent=env)
                 
                 if statement.exception_var:
+                    # 提取简单的错误消息，不包含堆栈跟踪
+                    simple_message = str(e)
+                    if "Runtime Error: " in simple_message:
+                        simple_message = simple_message.split("Runtime Error: ")[-1]
                     catch_env.define(statement.exception_var, {
                         'type': type(e).__name__,
-                        'message': str(e)
+                        'message': simple_message
                     })
                 
                 # Execute catch block
@@ -1044,6 +1064,27 @@ class Interpreter:
                 raise VanctionAnytionError(self.current_file, getattr(expr, 'line', 0), getattr(expr, 'column', 0))
             return value
         
+        elif isinstance(expr, UnaryExpression):
+            # Handle unary expressions like +42, -3.14, !true
+            operand = self.evaluate_expression(expr.operand, env)
+            
+            # Check for anytion values
+            if isinstance(operand, AnytionType):
+                raise VanctionAnytionError(self.current_file, getattr(expr, 'line', 0), getattr(expr, 'column', 0))
+            
+            # Check for unassigned values (None)
+            if operand is None:
+                raise VanctionUnassignedError(self.current_file, getattr(expr, 'line', 0), getattr(expr, 'column', 0))
+            
+            if expr.operator == '+':
+                return operand  # Unary plus is identity
+            elif expr.operator == '-':
+                return -operand  # Unary minus negates
+            elif expr.operator == '!':
+                return not self.is_truthy(operand)  # Logical NOT
+            else:
+                raise VanctionRuntimeError(f"Unknown unary operator: {expr.operator}", self.current_file)
+        
         elif isinstance(expr, BinaryExpression):
             if expr.operator == '=':
                 # Assignment
@@ -1149,32 +1190,42 @@ class Interpreter:
             obj_name = expr.object
             member_name = expr.property
             full_name = f"{obj_name}.{member_name}"
-            
-            print(f"Debug: 处理 MemberExpression: {full_name}")
-            
-            # First, try to get the full name directly from global environment (for standard imports)
+                        
+            # First, try to get the full name directly from current environment
             try:
-                return self.global_env.get(full_name)
+                return env.get(full_name)
             except VanctionRuntimeError as e:
-                # Only proceed to object access if the error is about undefined variable
-                # If the full name was found but not accessible as a property, we should not proceed
-                if "property" not in str(e):
-                    try:
-                        # If not found, check if it's an object access (for alias imports or dictionary objects)
-                        obj = self.global_env.get(obj_name)
-                        if isinstance(obj, dict) and member_name in obj:
-                            return obj[member_name]
-                        else:
-                            # Try one more time to get the full name directly, in case of a function
+                # If not found in current environment, try global environment (for standard imports)
+                try:
+                    return self.global_env.get(full_name)
+                except VanctionRuntimeError as global_e:
+                    # Only proceed to object access if the error is about undefined variable
+                    # If the full name was found but not accessible as a property, we should not proceed
+                    if "property" not in str(global_e):
+                        try:
+                            # Try to get the object from current environment first
                             try:
-                                return self.global_env.get(full_name)
-                            except:
-                                raise VanctionUndefinedError(full_name, "property")
-                    except VanctionRuntimeError:
-                        # If object not found at all, re-raise the original error
-                        raise e
-                else:
-                    raise e
+                                obj = env.get(obj_name)
+                            except VanctionRuntimeError:
+                                # If not found in current environment, try global environment
+                                obj = self.global_env.get(obj_name)
+                                
+                            if isinstance(obj, dict) and member_name in obj:
+                                return obj[member_name]
+                            else:
+                                # Try one more time to get the full name directly, in case of a function
+                                try:
+                                    return env.get(full_name)
+                                except:
+                                    try:
+                                        return self.global_env.get(full_name)
+                                    except:
+                                        raise VanctionUndefinedError(full_name, "property")
+                        except VanctionRuntimeError:
+                            # If object not found at all, re-raise the original error
+                            raise global_e
+                    else:
+                        raise global_e
         
         elif isinstance(expr, CallExpression):
             return self.evaluate_call_expression(expr, env)

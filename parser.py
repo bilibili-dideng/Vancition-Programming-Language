@@ -573,20 +573,37 @@ class Parser:
         if self.current_token and self.current_token.type == TokenType.CATCH:
             self.advance()
             
-            # Support new catch syntax: catch ([exception_type]) as [variable] {}
+            # Support various catch syntaxes:
+            # 1. catch ([exception_type]) as [variable] {}
+            # 2. catch (variable) {}  - 新增支持的语法
+            # 3. catch {}  - 向后兼容
             if self.current_token and self.current_token.type == TokenType.LPAREN:
                 self.consume_with_filename(TokenType.LPAREN)
                 
-                # Parse exception type (optional)
+                # 检查是否为第一种语法：catch (Type) as variable
+                # 或第二种语法：catch (variable) {}
                 if self.current_token and self.current_token.type == TokenType.IDENTIFIER:
-                    exception_type = self.consume_with_filename(TokenType.IDENTIFIER).value
-                
-                self.consume_with_filename(TokenType.RPAREN)
-                
-                # Parse "as" keyword and variable name
-                if self.current_token and self.current_token.type == TokenType.IDENTIFIER and self.current_token.value == "as":
-                    self.advance()  # Consume "as"
-                    exception_var = self.consume_with_filename(TokenType.IDENTIFIER).value
+                    # 保存当前标识符
+                    identifier = self.current_token.value
+                    self.advance()
+                    
+                    # 检查是否有 "as" 关键字
+                    if self.current_token and self.current_token.type == TokenType.RPAREN:
+                        # 第二种语法：catch (variable) {}
+                        self.consume_with_filename(TokenType.RPAREN)
+                        exception_var = identifier
+                    else:
+                        # 第一种语法：catch (Type) as variable
+                        exception_type = identifier
+                        self.consume_with_filename(TokenType.RPAREN)
+                        
+                        # Parse "as" keyword and variable name
+                        if self.current_token and self.current_token.type == TokenType.IDENTIFIER and self.current_token.value == "as":
+                            self.advance()  # Consume "as"
+                            exception_var = self.consume_with_filename(TokenType.IDENTIFIER).value
+                else:
+                    # 没有标识符，直接关闭括号
+                    self.consume_with_filename(TokenType.RPAREN)
             else:
                 # Backward compatibility: catch {}
                 exception_var = None
@@ -903,7 +920,8 @@ class Parser:
                 position += 2
             
             # Check if after this sequence there's an assignment operator
-            if position < len(self.tokens) and self.tokens[position].type == TokenType.ASSIGN:
+            # AND there are multiple variables (comma separated)
+            if position < len(self.tokens) and self.tokens[position].type == TokenType.ASSIGN and len(temp_tokens) > 1:
                 # This is a multi-variable assignment
                 variables = []
                 # Replay the token consumption
@@ -1189,6 +1207,14 @@ class Parser:
             value = self.current_token.value
             self.advance()
             return Literal(value=value)
+        
+        elif self.current_token.type == TokenType.TRUE:
+            self.advance()
+            return Literal(value=True)
+        
+        elif self.current_token.type == TokenType.FALSE:
+            self.advance()
+            return Literal(value=False)
         
         elif self.current_token.type == TokenType.IDENTIFIER:
             name = self.current_token.value

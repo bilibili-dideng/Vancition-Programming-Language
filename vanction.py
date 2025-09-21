@@ -15,8 +15,12 @@ func main() {
 import sys
 import os
 import argparse
+
+# Increase integer string conversion limit to handle very large numbers
+sys.set_int_max_str_digits(0)  # 0 means unlimited
+
 from lexer import Lexer
-from parser import Parser
+from parser import Parser, ExpressionStatement
 from interpreter import Interpreter, VanctionException, VanctionRuntimeError
 
 def run_file(filename: str):
@@ -116,8 +120,22 @@ def run_repl():
                 parser = Parser(tokens, "<repl>")
                 ast = parser.parse()
                 
-                # Use REPL mode to interpret and execute
-                interpreter.interpret_repl(ast)
+                # Use custom approach for REPL to handle and display expression results
+                if hasattr(ast, 'top_level_statements') and ast.top_level_statements:
+                    # Process top-level statements specially for REPL
+                    for stmt in ast.top_level_statements:
+                        if isinstance(stmt, ExpressionStatement):
+                            expr = stmt.expression
+                            # Evaluate expression directly and print result
+                            result = interpreter.evaluate_expression(expr, interpreter.global_env)
+                            if result is not None:
+                                print(result)
+                        else:
+                            # Execute other types of statements normally
+                            interpreter.execute_statement(stmt, interpreter.global_env)
+                else:
+                    # Fallback to original interpret_repl method
+                    interpreter.interpret_repl(ast)
                 
             except SyntaxError as e:
                 print(f"Syntax error: {e}")

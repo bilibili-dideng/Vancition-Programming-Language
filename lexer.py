@@ -157,8 +157,8 @@ class Lexer:
             '<': TokenType.LESS,
             '>': TokenType.GREATER,
             '=': TokenType.ASSIGN,
-            '&': TokenType.AND,
-            '|': TokenType.OR,
+            '&': TokenType.BITWISE_AND,
+            '|': TokenType.BITWISE_OR,
             '!': TokenType.NOT,
             '^': TokenType.POWER,
             '->': TokenType.ARROW,     # Lambda arrow
@@ -195,11 +195,11 @@ class Lexer:
             self.advance()  # Skip newline
             self.skip_whitespace()  # Skip whitespace after newline
     
-    def read_string(self) -> str:
+    def read_string(self, delimiter: str = '"') -> str:
         value = ''
-        self.advance()  # Skip opening double quote
+        self.advance()  # Skip opening quote
         
-        while self.current_char() != '"' and self.current_char() != '\0':
+        while self.current_char() != delimiter and self.current_char() != '\0':
             if self.current_char() == '\\':
                 self.advance()
                 escape_char = self.current_char()
@@ -211,8 +211,8 @@ class Lexer:
                     value += '\r'
                 elif escape_char == '\\':
                     value += '\\'
-                elif escape_char == '"':
-                    value += '"'
+                elif escape_char == delimiter:
+                    value += delimiter
                 else:
                     value += escape_char
                 self.advance()
@@ -220,8 +220,8 @@ class Lexer:
                 value += self.current_char()
                 self.advance()
         
-        if self.current_char() == '"':
-            self.advance()  # Skip closing double quote
+        if self.current_char() == delimiter:
+            self.advance()  # Skip closing quote
         
         return value
     
@@ -269,8 +269,8 @@ class Lexer:
                 continue
             
             # Handle string
-            if self.current_char() == '"':
-                value = self.read_string()
+            if self.current_char() == '"' or self.current_char() == "'":
+                value = self.read_string(self.current_char())
                 self.tokens.append(Token(TokenType.STRING, value, line, column))
                 continue
             
@@ -296,39 +296,6 @@ class Lexer:
                 self.tokens.append(Token(token_type, value, line, column))
                 continue
             
-            # Handle comments
-            if self.current_char() == '|':
-                # Single line comment: | xxxx
-                next_char = self.peek_char()
-                if next_char != '\\' and next_char != '*':
-                    while self.current_char() != '\n' and self.current_char() != '\0':
-                        self.advance()
-                    continue
-                
-                # Multi-line comment: |\ xxxxx\nxxxx /|
-                if next_char == '\\':
-                    self.advance()  # Skip |
-                    self.advance()  # Skip \
-                    while self.current_char() != '\0':
-                        if self.current_char() == '/' and self.peek_char() == '|':
-                            self.advance()  # Skip /
-                            self.advance()  # Skip |
-                            break
-                        self.advance()
-                    continue
-                
-                # Documentation comment: |*\n * xx:xx\n * xx:xx\n*|
-                if next_char == '*':
-                    self.advance()  # Skip |
-                    self.advance()  # Skip *
-                    while self.current_char() != '\0':
-                        if self.current_char() == '*' and self.peek_char() == '|':
-                            self.advance()  # Skip *
-                            self.advance()  # Skip |
-                            break
-                        self.advance()
-                    continue
-            
             # Handle double character operators
             if self.current_char() == '=' and self.peek_char() == '=':
                 self.tokens.append(Token(TokenType.EQUAL, '==', line, column))
@@ -344,6 +311,20 @@ class Lexer:
             
             if self.current_char() == '<' and self.peek_char() == '=':
                 self.tokens.append(Token(TokenType.LESS_EQUAL, '<=', line, column))
+                self.advance()
+                self.advance()
+                continue
+            
+            # Add support for logical AND (&&) operator
+            if self.current_char() == '&' and self.peek_char() == '&':
+                self.tokens.append(Token(TokenType.AND, '&&', line, column))
+                self.advance()
+                self.advance()
+                continue
+            
+            # Add support for logical OR (||) operator
+            if self.current_char() == '|' and self.peek_char() == '|':
+                self.tokens.append(Token(TokenType.OR, '||', line, column))
                 self.advance()
                 self.advance()
                 continue
@@ -380,6 +361,39 @@ class Lexer:
                 self.advance()
                 self.advance()
                 continue
+            
+            # Handle comments
+            if self.current_char() == '|':
+                # Single line comment: | xxxx
+                next_char = self.peek_char()
+                if next_char != '\\' and next_char != '*':
+                    while self.current_char() != '\n' and self.current_char() != '\0':
+                        self.advance()
+                    continue
+                
+                # Multi-line comment: |\ xxxxx\nxxxx /|
+                if next_char == '\\':
+                    self.advance()  # Skip |
+                    self.advance()  # Skip \
+                    while self.current_char() != '\0':
+                        if self.current_char() == '/' and self.peek_char() == '|':
+                            self.advance()  # Skip /
+                            self.advance()  # Skip |
+                            break
+                        self.advance()
+                    continue
+                
+                # Documentation comment: |*\n * xx:xx\n * xx:xx\n*|
+                if next_char == '*':
+                    self.advance()  # Skip |
+                    self.advance()  # Skip *
+                    while self.current_char() != '\0':
+                        if self.current_char() == '*' and self.peek_char() == '|':
+                            self.advance()  # Skip *
+                            self.advance()  # Skip |
+                            break
+                        self.advance()
+                    continue
             
             # Handle single character tokens
             if self.current_char() in self.single_char_tokens:
