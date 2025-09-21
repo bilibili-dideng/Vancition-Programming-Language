@@ -1,33 +1,33 @@
-# Vanction 编程语言
+# Vanction Programming Language
 
-Vanction 是一个简单易学的编程语言，专为教育和快速原型设计而开发。
+Vanction is a simple and easy-to-learn programming language designed for education and rapid prototyping.
 
-## 特性
+## Features
 
-- **简洁的语法**: 类似现代编程语言的语法，易于阅读和编写
-- **函数支持**: 支持自定义函数定义和调用
-- **变量系统**: 支持变量定义和赋值
-- **控制流**: 支持 if-else 条件语句和 while 循环
-- **内置函数**: 提供 System.print 等内置函数
-- **交互式解释器**: 支持 REPL 模式进行交互式编程
+- **Clean Syntax**: Modern programming language-like syntax, easy to read and write
+- **Function Support**: Support for custom function definitions and calls
+- **Variable System**: Support for variable definition and assignment
+- **Control Flow**: Support for if-else conditional statements and while loops
+- **Built-in Functions**: Provides built-in functions like System.print
+- **Interactive Interpreter**: Supports REPL mode for interactive programming
 
-## 快速开始
+## Quick Start
 
-### 安装
+### Installation
 
-Vanction 是基于 Python 的解释器，无需额外安装。只需确保系统安装了 Python 3.6+。
+Vanction is a Python-based interpreter that requires no additional installation. Just ensure Python 3.6+ is installed on your system.
 
-### 运行程序
+### Running Programs
 
 ```bash
-| 运行 Vanction 源文件
+# Run Vanction source file
 python vanction.py examples/hello.va
 
-| 启动交互式解释器
+# Start interactive interpreter
 python vanction.py --repl
 ```
 
-## 语法示例
+## Syntax Examples
 
 ### Hello World
 
@@ -37,7 +37,7 @@ func main() {
 }
 ```
 
-### 变量和函数
+### Variables and Functions
 
 ```vanction
 func greet(name) {
@@ -55,11 +55,11 @@ func main() {
 }
 ```
 
-### 控制流
+### Control Flow
 
-```Vanction
+```vanction
 func main() {
-    | if-else 条件语句
+    # if-else conditional statements
     age = 18
     if age >= 18 {
         System.print("You are an adult")
@@ -78,7 +78,7 @@ func main() {
         System.print("Grade: F")
     }
     
-    | while 循环
+    # while loop
     counter = 0
     while counter < 5 {
         System.print("Counter:", counter)
@@ -87,9 +87,9 @@ func main() {
 }
 ```
 
-### 函数返回值
+### Function Return Values
 
-```Vanction
+```vanction
 func add(a, b) {
     return a + b
 }
@@ -100,42 +100,42 @@ func main() {
 }
 ```
 
-## 语言特性
+## Language Features
 
-### 数据类型
+### Data Types
 
-- **数字**: 整数和浮点数 (1, 3.14)
-- **字符串**: 双引号包围的文本 ("Hello")
-- **布尔值**: 通过比较运算得到 (true/false)
+- **Numbers**: Integers and floating-point numbers (1, 3.14)
+- **Strings**: Text enclosed in double quotes ("Hello")
+- **Booleans**: Obtained through comparison operations (true/false)
 
-### 运算符
+### Operators
 
-- **算术运算符**: +, -, *, /
-- **比较运算符**: ==, !=, <, >, <=, >=
-- **逻辑运算符**: and, or
-- **赋值运算符**: =
+- **Arithmetic Operators**: +, -, *, /
+- **Comparison Operators**: ==, !=, <, >, <=, >=
+- **Logical Operators**: and, or
+- **Assignment Operators**: =
 
-### 内置函数
+### Built-in Functions
 
-- `System.print(...)`: 打印输出，支持多个参数 "message","end"
-- `len(string)`: 获取字符串长度
-- `str(value)`: 转换为字符串
-- `int(value)`: 转换为整数
-- `float(value)`: 转换为浮点数
-- ‘System.input(...)’
+- `System.print(...)`: Print output, supports multiple parameters
+- `len(string)`: Get string length
+- `str(value)`: Convert to string
+- `int(value)`: Convert to integer
+- `float(value)`: Convert to float
+- `System.input(...)`: Get user input
 
-## 扩展功能
+## Extension Features
 
-Vanction 语言设计为易于扩展，可以通过以下方式添加新功能：
+Vanction language is designed to be easily extensible. New features can be added through:
 
-1. **添加新的内置函数**: 在 `interpreter.py` 的 `setup_builtin_functions` 方法中添加
-2. **添加新的语法**: 扩展 `lexer.py` 和 `parser.py` 来支持新的语法结构
-3. **添加新的运算符**: 在 `parser.py` 和 `interpreter.py` 中实现新的运算符
+1. **Adding New Built-in Functions**: Add in the `setup_builtin_functions` method in `interpreter.py`
+2. **Adding New Syntax**: Extend `lexer.py` and `parser.py` to support new syntax structures
+3. **Adding New Operators**: Implement new operators in `parser.py` and `interpreter.py`
 
-## 贡献
+## Contributing
 
-欢迎提交 Issue 和 Pull Request 来改进 Vanction 语言！
+Issues and Pull Requests are welcome to improve the Vanction language!
 
-## 许可证
+## License
 
-MIT License - 详见 LICENSE 文件
+MIT License - See LICENSE file for details

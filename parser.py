@@ -2,7 +2,7 @@ from typing import List, Optional, Union, Dict, Tuple
 from dataclasses import dataclass
 from lexer import Token, TokenType, Lexer
 
-# AST节点定义
+# AST Node Definitions
 @dataclass
 class ASTNode:
     line: int = 0
@@ -17,11 +17,14 @@ class ASTNode:
 @dataclass
 class Program(ASTNode):
     functions: List['FunctionDef'] = None
+    top_level_statements: List['Statement'] = None
     
     def __post_init__(self):
         super().__post_init__()
         if self.functions is None:
             self.functions = []
+        if self.top_level_statements is None:
+            self.top_level_statements = []
 
 @dataclass
 class FunctionDef(ASTNode):
@@ -78,7 +81,9 @@ class WhileStatement(Statement):
 
 @dataclass
 class ImportStatement(Statement):
-    module_name: str = ""
+    module_name: str = ""  # Module name
+    alias: str = ""  # Import alias, for import xxx using xxx syntax
+    using: bool = False  # Whether to use alias import
 
 @dataclass
 class BreakStatement(Statement):
@@ -90,11 +95,11 @@ class ContinueStatement(Statement):
 
 @dataclass
 class ForStatement(Statement):
-    variable: Optional[str] = None  # 用于 for (item in collection)
-    iterable: Optional['Expression'] = None  # 用于 for (item in collection)
-    init: Optional['Expression'] = None  # 用于传统 for 循环
-    condition: Optional['Expression'] = None  # 用于传统 for 循环
-    update: Optional['Expression'] = None  # 用于传统 for 循环
+    variable: Optional[str] = None  # For for (item in collection)
+    iterable: Optional['Expression'] = None  # For for (item in collection)
+    init: Optional['Expression'] = None  # For traditional for loop
+    condition: Optional['Expression'] = None  # For traditional for loop
+    update: Optional['Expression'] = None  # For traditional for loop
     body: List[Statement] = None
     
     def __post_init__(self):
@@ -130,8 +135,18 @@ class UnaryExpression(Expression):
             self.operand = None
 
 @dataclass
+class MultiAssignmentExpression(Expression):
+    variables: list = None
+    value: Expression = None
+    
+    def __post_init__(self):
+        super().__post_init__()
+        if self.variables is None:
+            self.variables = []
+
+@dataclass
 class CallExpression(Expression):
-    function: str = ""
+    function: Union[str, 'LambdaExpression'] = ""
     arguments: List['Expression'] = None
     keyword_arguments: Dict[str, 'Expression'] = None
     
@@ -179,6 +194,46 @@ class DictExpression(Expression):
             self.entries = []
 
 @dataclass
+class TupleExpression(Expression):
+    elements: List['Expression'] = None
+    
+    def __post_init__(self):
+        super().__post_init__()
+        if self.elements is None:
+            self.elements = []
+
+@dataclass
+class TryStatement(Statement):
+    try_body: List[Statement] = None
+    catch_body: Optional[List[Statement]] = None
+    exception_var: Optional[str] = None
+    exception_type: Optional[str] = None  # New: specify exception type to catch
+    finally_body: Optional[List[Statement]] = None
+    
+    def __post_init__(self):
+        super().__post_init__()
+        if self.try_body is None:
+            self.try_body = []
+        if self.catch_body is None:
+            self.catch_body = None
+        if self.finally_body is None:
+            self.finally_body = None
+
+@dataclass
+class ThrowStatement(Statement):
+    expression: Optional['Expression'] = None
+
+@dataclass
+class LambdaExpression(Expression):
+    parameters: List[str] = None
+    body: 'Expression' = None
+    
+    def __post_init__(self):
+        super().__post_init__()
+        if self.parameters is None:
+            self.parameters = []
+
+@dataclass
 class IndexExpression(Expression):
     object: 'Expression' = None
     index: 'Expression' = None
@@ -189,6 +244,29 @@ class IndexExpression(Expression):
             self.object = None
         if self.index is None:
             self.index = None
+
+@dataclass
+class SwitchStatement(Statement):
+    expression: 'Expression' = None
+    cases: List['CaseStatement'] = None
+    default_case: Optional[List[Statement]] = None
+    
+    def __post_init__(self):
+        super().__post_init__()
+        if self.cases is None:
+            self.cases = []
+        if self.default_case is None:
+            self.default_case = None
+
+@dataclass
+class CaseStatement(ASTNode):
+    value: 'Expression' = None
+    body: List[Statement] = None
+    
+    def __post_init__(self):
+        super().__post_init__()
+        if self.body is None:
+            self.body = []
 
 class Parser:
     def __init__(self, tokens: List[Token], filename: str = "<file>"):
@@ -289,40 +367,29 @@ class Parser:
     
     def parse(self) -> Program:
         functions = []
-        top_level_statements = []  # 存储顶级语句（如import）
+        top_level_statements = []  # Store top-level statements (like import)
         
         while self.current_token and self.current_token.type != TokenType.EOF:
             self.skip_newlines()
             if self.current_token and self.current_token.type == TokenType.FUNC:
                 functions.append(self.parse_function())
             elif self.current_token and self.current_token.type == TokenType.IMPORT:
-                # 收集顶级import语句
+                # Collect top-level import statements
                 top_level_statements.append(self.parse_import_statement())
             else:
-                self.advance()
-        
-        # 如果有顶级语句，创建或修改main函数来包含它们
-        if top_level_statements:
-            # 查找是否已有main函数
-            main_func = None
-            for func in functions:
-                if func.name == "main":
-                    main_func = func
+                # Handle other top-level statements (like expression statements)
+                if self.current_token and self.current_token.type != TokenType.EOF:
+                    stmt = self.parse_statement()
+                    if stmt:
+                        top_level_statements.append(stmt)
+                else:
                     break
-            
-            if main_func:
-                # 如果已有main函数，在函数体开头插入顶级语句
-                main_func.body = top_level_statements + main_func.body
-            else:
-                # 如果没有main函数，创建一个新的main函数
-                main_func = FunctionDef(
-                    name="main",
-                    parameters=[],
-                    body=top_level_statements
-                )
-                functions.insert(0, main_func)  # 将main函数放在最前面
         
-        return Program(functions=functions)
+        # Return program with both functions and top-level statements
+        return Program(
+            functions=functions,
+            top_level_statements=top_level_statements
+        )
     
     def parse_function(self) -> FunctionDef:
         func_token = self.consume_with_filename(TokenType.FUNC)
@@ -360,12 +427,12 @@ class Parser:
             self.skip_newlines()
             if self.current_token and self.current_token.type != TokenType.RBRACE:
                 statements.append(self.parse_statement())
-            # 检查右大括号后的冒号（仅在某些上下文中需要）
+            # Check for colon after right brace (only needed in certain contexts)
             if self.current_token and self.current_token.type == TokenType.RBRACE and self.peek_token() and self.peek_token().type == TokenType.COLON:
-                # 跳过右大括号后的冒号（用于if-else和while语句）
+                # Skip colon after right brace (used for if-else and while statements)
                 if self.peek_token() and self.peek_token().type == TokenType.COLON:
-                    self.advance()  # 跳过RBRACE
-                    self.advance()  # 跳过COLON
+                    self.advance()  # Skip RBRACE
+                    self.advance()  # Skip COLON
                     break
         
         return statements
@@ -373,8 +440,11 @@ class Parser:
     def parse_statement(self) -> Statement:
         # Save current token position for error reporting
         start_token = self.current_token
-        
-        if self.current_token.type == TokenType.RETURN:
+
+        if self.current_token.type == TokenType.FUNC:
+            # Support nested function definitions
+            return self.parse_function()
+        elif self.current_token.type == TokenType.RETURN:
             stmt = self.parse_return_statement()
         elif self.current_token.type == TokenType.IF:
             stmt = self.parse_if_statement()
@@ -382,19 +452,85 @@ class Parser:
             stmt = self.parse_while_statement()
         elif self.current_token.type == TokenType.FOR:
             stmt = self.parse_for_statement()
+        elif self.current_token.type == TokenType.SWITCH:
+            stmt = self.parse_switch_statement()
+        elif self.current_token.type == TokenType.TRY:
+            stmt = self.parse_try_statement()
+        elif self.current_token.type == TokenType.THROW:
+            stmt = self.parse_throw_statement()
+        elif self.current_token.type == TokenType.DEFINE:
+            # Handle define statement: define variableName;
+            self.advance()  # Consume 'define'
+            if self.current_token.type != TokenType.IDENTIFIER:
+                raise SyntaxError(f"Expected identifier after 'define' at line {start_token.line if start_token else 0}")
+            var_name = self.current_token.value
+            self.advance()
+            
+            # Check for semicolon
+            if self.current_token.type != TokenType.SEMICOLON:
+                raise SyntaxError(f"Expected semicolon after 'define {var_name}' at line {start_token.line if start_token else 0}")
+            self.advance()
+            
+            # Create an assignment expression with anytion value
+            left = Identifier(name=var_name)
+            right = Identifier(name="anytion")
+            expr = BinaryExpression(left=left, operator='=', right=right)
+            stmt = ExpressionStatement(expression=expr)
+            stmt.line = start_token.line
+            stmt.column = start_token.column
+        elif self.current_token.type == TokenType.IMMUT:
+            # Handle immut statement: immut variableName = value;
+            self.advance()  # Consume 'immut'
+            if self.current_token.type != TokenType.IDENTIFIER:
+                raise SyntaxError(f"Expected identifier after 'immut' at line {start_token.line if start_token else 0}")
+            var_name = self.current_token.value
+            self.advance()
+            
+            if self.current_token.type != TokenType.ASSIGN:
+                raise SyntaxError(f"Expected '=' after 'immut {var_name}' at line {start_token.line if start_token else 0}")
+            self.advance()
+            
+            # Parse the value expression
+            value = self.parse_expression()
+            
+            # Check for semicolon
+            if self.current_token.type != TokenType.SEMICOLON:
+                raise SyntaxError(f"Expected semicolon after 'immut {var_name} = ...' at line {start_token.line if start_token else 0}")
+            self.advance()
+            
+            # Create an assignment expression with special metadata for immut
+            left = Identifier(name=var_name)
+            expr = BinaryExpression(left=left, operator='=', right=value)
+            expr.is_constant = True  # Mark as constant
+            stmt = ExpressionStatement(expression=expr)
+            stmt.line = start_token.line
+            stmt.column = start_token.column
         elif self.current_token.type == TokenType.BREAK:
             self.advance()
             stmt = BreakStatement()
+            # break statement also needs semicolon or newline
+            if self.current_token and self.current_token.type == TokenType.SEMICOLON:
+                self.advance()
+            elif self.current_token and self.current_token.type == TokenType.NEWLINE:
+                self.advance()
+            # break statement can be without semicolon (in certain contexts)
+            
         elif self.current_token.type == TokenType.CONTINUE:
             self.advance()
             stmt = ContinueStatement()
+            # continue statement also needs semicolon or newline
+            if self.current_token and self.current_token.type == TokenType.SEMICOLON:
+                self.advance()
+            elif self.current_token and self.current_token.type == TokenType.NEWLINE:
+                self.advance()
+            # continue statement can be without semicolon (in certain contexts)
         elif self.current_token.type == TokenType.IMPORT:
             stmt = self.parse_import_statement()
         elif self.current_token.type == TokenType.IDENTIFIER:
-            # 检查是否是函数调用或赋值
+            # Check if it's function call or assignment
             stmt = self.parse_expression_statement()
         elif self.current_token.type == TokenType.SYSTEM:
-            # 处理 System.print 这样的调用
+            # Handle calls like System.print
             stmt = self.parse_expression_statement()
         else:
             stmt = self.parse_expression_statement()
@@ -413,7 +549,7 @@ class Parser:
         if self.current_token.type != TokenType.SEMICOLON and self.current_token.type != TokenType.NEWLINE:
             value = self.parse_expression()
         
-        # 允许语句以分号或换行符结尾
+        # Allow statements to end with semicolon or newline
         if self.current_token and self.current_token.type == TokenType.SEMICOLON:
             self.advance()
         elif self.current_token and self.current_token.type == TokenType.NEWLINE:
@@ -422,6 +558,65 @@ class Parser:
             raise SyntaxError(f"Expected semicolon or newline after return statement at line {self.current_token.line if self.current_token else 0}")
         
         return ReturnStatement(value=value)
+    
+    def parse_try_statement(self) -> TryStatement:
+        self.consume_with_filename(TokenType.TRY)
+        self.consume_with_filename(TokenType.LBRACE)
+        
+        try_body = self.parse_statements()
+        self.consume_with_filename(TokenType.RBRACE)
+        
+        catch_body = None
+        exception_var = None
+        exception_type = None
+        
+        if self.current_token and self.current_token.type == TokenType.CATCH:
+            self.advance()
+            
+            # Support new catch syntax: catch ([exception_type]) as [variable] {}
+            if self.current_token and self.current_token.type == TokenType.LPAREN:
+                self.consume_with_filename(TokenType.LPAREN)
+                
+                # Parse exception type (optional)
+                if self.current_token and self.current_token.type == TokenType.IDENTIFIER:
+                    exception_type = self.consume_with_filename(TokenType.IDENTIFIER).value
+                
+                self.consume_with_filename(TokenType.RPAREN)
+                
+                # Parse "as" keyword and variable name
+                if self.current_token and self.current_token.type == TokenType.IDENTIFIER and self.current_token.value == "as":
+                    self.advance()  # Consume "as"
+                    exception_var = self.consume_with_filename(TokenType.IDENTIFIER).value
+            else:
+                # Backward compatibility: catch {}
+                exception_var = None
+                exception_type = None
+            
+            self.consume_with_filename(TokenType.LBRACE)
+            catch_body = self.parse_statements()
+            self.consume_with_filename(TokenType.RBRACE)
+        
+        finally_body = None
+        if self.current_token and self.current_token.type == TokenType.FINALLY:
+            self.advance()
+            self.consume_with_filename(TokenType.LBRACE)
+            finally_body = self.parse_statements()
+            self.consume_with_filename(TokenType.RBRACE)
+        
+        return TryStatement(try_body=try_body, catch_body=catch_body, finally_body=finally_body, 
+                         exception_var=exception_var, exception_type=exception_type)
+    
+    def parse_throw_statement(self) -> ThrowStatement:
+        self.consume_with_filename(TokenType.THROW)
+        expression = self.parse_expression()
+        
+        # Allow statement to end with semicolon or newline
+        if self.current_token and self.current_token.type == TokenType.SEMICOLON:
+            self.advance()
+        elif self.current_token and self.current_token.type == TokenType.NEWLINE:
+            self.advance()
+        
+        return ThrowStatement(expression=expression)
     
     def parse_if_statement(self) -> IfStatement:
         self.consume_with_filename(TokenType.IF)
@@ -432,19 +627,19 @@ class Parser:
         self.consume_with_filename(TokenType.RBRACE)
         
         else_body = None
-        # 处理else-if和else部分
+        # Handle else-if and else parts
         else_body = None
         if self.current_token and self.current_token.type == TokenType.ELSE_IF:
-            # 处理多个else-if
+            # Handle multiple else-if
             current_if = None
             while self.current_token and self.current_token.type == TokenType.ELSE_IF:
-                self.advance()  # 消费else-if
+                self.advance()  # Consume else-if
                 else_if_condition = self.parse_expression()
                 self.consume_with_filename(TokenType.LBRACE)
                 else_if_body = self.parse_statements()
                 self.consume_with_filename(TokenType.RBRACE)
                 
-                # 创建if语句
+                # Create if statement
                 new_if = IfStatement(
                     condition=else_if_condition, 
                     then_body=else_if_body, 
@@ -454,13 +649,13 @@ class Parser:
                 if current_if is None:
                     current_if = new_if
                 else:
-                    # 将新的if语句链接到前一个的else部分
+                    # Link new if statement to previous one's else part
                     current_if.else_body = [new_if]
                     current_if = new_if
             
-            # 检查是否有else部分
+            # Check if there's else part
             if self.current_token and self.current_token.type == TokenType.ELSE:
-                self.advance()  # 消费else
+                self.advance()  # Consume else
                 self.consume_with_filename(TokenType.LBRACE)
                 final_else_body = self.parse_statements()
                 self.consume_with_filename(TokenType.RBRACE)
@@ -469,7 +664,7 @@ class Parser:
             else_body = [current_if] if current_if else None
             
         elif self.current_token and self.current_token.type == TokenType.ELSE:
-            # 普通else（不再支持else if语法）
+            # Regular else (no longer supports else if syntax)
             self.advance()
             self.consume_with_filename(TokenType.LBRACE)
             else_body = self.parse_statements()
@@ -490,21 +685,21 @@ class Parser:
     def parse_for_statement(self) -> ForStatement:
         self.consume_with_filename(TokenType.FOR)
         
-        # 解析for循环的三种形式：
+        # Parse three forms of for loop:
         # 1. for (init; condition; update) { body }
         # 2. for (item in array) { body }
         # 3. for (key, value in dict) { body }
         
         self.consume_with_filename(TokenType.LPAREN)
         
-        # 检查是否是范围循环语法
+        # Check if it's range loop syntax
         if self.current_token and self.current_token.type == TokenType.IDENTIFIER:
             var_name = self.current_token.value
             self.advance()
             
             if self.current_token and self.current_token.value == 'in':
-                # for (item in collection) 语法
-                self.advance()  # 消费 'in'
+                # for (item in collection) syntax
+                self.advance()  # Consume 'in'
                 iterable = self.parse_expression()
                 self.consume_with_filename(TokenType.RPAREN)
                 self.consume_with_filename(TokenType.LBRACE)
@@ -517,24 +712,24 @@ class Parser:
                     body=body
                 )
             else:
-                # 传统for循环：for (init; condition; update)
-                # 回退并解析初始化
-                self.position -= 1  # 回退
+                # Traditional for loop: for (init; condition; update)
+                # Rollback and parse initialization
+                self.position -= 1  # Rollback
                 self.current_token = self.tokens[self.position] if self.position < len(self.tokens) else None
                 
-                # 解析初始化语句
+                # Parse initialization statement
                 init = None
                 if self.current_token and self.current_token.type != TokenType.SEMICOLON:
                     init = self.parse_expression()
                 self.consume_with_filename(TokenType.SEMICOLON)
                 
-                # 解析条件
+                # Parse condition
                 condition = None
                 if self.current_token and self.current_token.type != TokenType.SEMICOLON:
                     condition = self.parse_expression()
                 self.consume_with_filename(TokenType.SEMICOLON)
                 
-                # 解析更新
+                # Parse update
                 update = None
                 if self.current_token and self.current_token.type != TokenType.RPAREN:
                     update = self.parse_expression()
@@ -551,7 +746,7 @@ class Parser:
                     body=body
                 )
         else:
-            # 传统for循环：for (; condition; update) 或 for (;;)
+            # Traditional for loop: for (; condition; update) or for (;;)
             init = None
             if self.current_token and self.current_token.type != TokenType.SEMICOLON:
                 init = self.parse_expression()
@@ -578,17 +773,91 @@ class Parser:
                 body=body
             )
     
+    def parse_switch_statement(self) -> SwitchStatement:
+        """Parse switch statement"""
+        self.consume_with_filename(TokenType.SWITCH)
+        expression = self.parse_expression()
+        self.consume_with_filename(TokenType.LBRACE)
+        
+        cases = []
+        default_case = None
+        
+        while self.current_token and self.current_token.type != TokenType.RBRACE:
+            self.skip_newlines()
+            
+            if self.current_token and self.current_token.type == TokenType.CASE:
+                self.advance()  # Consume 'case'
+                case_value = self.parse_expression()
+                self.consume_with_filename(TokenType.COLON)
+                
+                case_body = []
+                # Parse case statement body until next case, default, or right brace
+                while (self.current_token and 
+                       self.current_token.type not in (TokenType.CASE, TokenType.DEFAULT, TokenType.RBRACE) and
+                       self.current_token.type != TokenType.EOF):
+                    if self.current_token.type == TokenType.NEWLINE:
+                        self.advance()
+                        continue
+                    case_body.append(self.parse_statement())
+                
+                cases.append(CaseStatement(value=case_value, body=case_body))
+                
+            elif self.current_token and self.current_token.type == TokenType.DEFAULT:
+                self.advance()  # Consume 'default'
+                self.consume_with_filename(TokenType.COLON)
+                
+                default_body = []
+                # Parse default statement body until next case or right brace
+                while (self.current_token and 
+                       self.current_token.type not in (TokenType.CASE, TokenType.DEFAULT, TokenType.RBRACE) and
+                       self.current_token.type != TokenType.EOF):
+                    if self.current_token.type == TokenType.NEWLINE:
+                        self.advance()
+                        continue
+                    default_body.append(self.parse_statement())
+                
+                default_case = default_body
+                
+            else:
+                self.advance()  # Skip unknown token
+        
+        self.consume_with_filename(TokenType.RBRACE)
+        
+        return SwitchStatement(expression=expression, cases=cases, default_case=default_case)
+    
     def parse_import_statement(self) -> ImportStatement:
         self.consume_with_filename(TokenType.IMPORT)
         
-        # 获取模块名（标识符）
+        # Get module name (identifier), support folder.module format
+        module_name = ""
         if self.current_token and self.current_token.type == TokenType.IDENTIFIER:
             module_name = self.current_token.value
             self.advance()
+            
+            # Support folder.module format
+            while self.current_token and self.current_token.type == TokenType.DOT:
+                self.advance()
+                if self.current_token and self.current_token.type == TokenType.IDENTIFIER:
+                    module_name += "." + self.current_token.value
+                    self.advance()
+                else:
+                    raise SyntaxError(f"Expected identifier after dot in import statement at line {self.current_token.line if self.current_token else 0}")
         else:
             raise SyntaxError(f"Import statement expects module name at line {self.current_token.line if self.current_token else 0}")
         
-        # 允许语句以分号或换行符结尾
+        # Check for using alias syntax
+        alias = ""
+        using = False
+        if self.current_token and self.current_token.type == TokenType.USING:
+            using = True
+            self.advance()
+            if self.current_token and self.current_token.type == TokenType.IDENTIFIER:
+                alias = self.current_token.value
+                self.advance()
+            else:
+                raise SyntaxError(f"Expected alias name after 'using' in import statement at line {self.current_token.line if self.current_token else 0}")
+        
+        # Allow statements to end with semicolon or newline
         if self.current_token and self.current_token.type == TokenType.SEMICOLON:
             self.advance()
         elif self.current_token and self.current_token.type == TokenType.NEWLINE:
@@ -596,18 +865,16 @@ class Parser:
         else:
             raise SyntaxError(f"Expected semicolon or newline after import statement at line {self.current_token.line if self.current_token else 0}")
         
-        return ImportStatement(module_name=module_name)
+        return ImportStatement(module_name=module_name, alias=alias, using=using)
     
     def parse_expression_statement(self) -> ExpressionStatement:
         expr = self.parse_expression()
         
-        # 允许语句以分号或换行符结尾
+        # Allow statement to end with semicolon
         if self.current_token and self.current_token.type == TokenType.SEMICOLON:
             self.advance()
-        elif self.current_token and self.current_token.type == TokenType.NEWLINE:
-            self.advance()
         else:
-            raise SyntaxError(f"Expected semicolon or newline after expression at line {self.current_token.line if self.current_token else 0}")
+            raise SyntaxError(f"Expected semicolon after expression at line {self.current_token.line if self.current_token else 0}")
         
         return ExpressionStatement(expression=expr)
     
@@ -620,6 +887,44 @@ class Parser:
         return expr
     
     def parse_assignment(self) -> Expression:
+        # First try to parse a multi-variable assignment (a, b, c = value)
+        # Check if we have identifiers separated by commas followed by assignment
+        if self.current_token and self.current_token.type == TokenType.IDENTIFIER:
+            # Look ahead to see if there's a comma after this identifier
+            position = self.position
+            temp_tokens = []
+            temp_tokens.append(self.current_token)
+            position += 1
+            
+            # Count how many consecutive identifier, comma pairs we have
+            while position < len(self.tokens) and self.tokens[position].type == TokenType.COMMA and position + 1 < len(self.tokens) and self.tokens[position + 1].type == TokenType.IDENTIFIER:
+                temp_tokens.append(self.tokens[position])  # Comma
+                temp_tokens.append(self.tokens[position + 1])  # Next identifier
+                position += 2
+            
+            # Check if after this sequence there's an assignment operator
+            if position < len(self.tokens) and self.tokens[position].type == TokenType.ASSIGN:
+                # This is a multi-variable assignment
+                variables = []
+                # Replay the token consumption
+                for i in range(0, len(temp_tokens), 2):
+                    var_name = temp_tokens[i].value
+                    self.advance()  # Consume identifier
+                    if i + 1 < len(temp_tokens):
+                        self.advance()  # Consume comma
+                
+                # Consume assignment operator
+                self.advance()
+                
+                # Parse the value expression
+                value = self.parse_assignment()
+                
+                # Recreate the identifiers list
+                variables = [Identifier(name=temp_tokens[i].value) for i in range(0, len(temp_tokens), 2)]
+                
+                return MultiAssignmentExpression(variables=variables, value=value)
+        
+        # If not a multi-variable assignment, parse regular assignment
         left = self.parse_logical_or()
         
         if self.current_token and self.current_token.type == TokenType.ASSIGN:
@@ -704,16 +1009,16 @@ class Parser:
             if self.current_token.type == TokenType.POWER:
                 operator = '^'
                 self.advance()
-                # 幂运算应该是右结合的，所以递归调用parse_power
+                # Power operation should be right-associative, so recursively call parse_power
                 right = self.parse_power()
             elif self.current_token.type == TokenType.POWER3:
                 operator = '^3'
                 self.advance()
-                right = Literal(value=3)  # 立方
+                right = Literal(value=3)  # Cube
             else:  # POWERX
                 operator = self.current_token.value
-                # 提取数字部分
-                power_num = int(operator[1:])  # 去掉^符号
+                # Extract numeric part
+                power_num = int(operator[1:])  # Remove ^ symbol
                 self.advance()
                 right = Literal(value=power_num)
             
@@ -726,9 +1031,14 @@ class Parser:
         
         while self.current_token and self.current_token.type in (TokenType.EQUAL, TokenType.NOT_EQUAL):
             operator = self.current_token.value
+            line = self.current_token.line if self.current_token else 0
+            column = self.current_token.column if self.current_token else 0
             self.advance()
             right = self.parse_bitwise_or()
-            left = BinaryExpression(left=left, operator=operator, right=right)
+            binary_expr = BinaryExpression(left=left, operator=operator, right=right)
+            binary_expr.line = line
+            binary_expr.column = column
+            left = binary_expr
         
         return left
     
@@ -737,9 +1047,14 @@ class Parser:
         
         while self.current_token and self.current_token.type in (TokenType.LESS, TokenType.GREATER, TokenType.LESS_EQUAL, TokenType.GREATER_EQUAL):
             operator = self.current_token.value
+            line = self.current_token.line if self.current_token else 0
+            column = self.current_token.column if self.current_token else 0
             self.advance()
             right = self.parse_term()
-            left = BinaryExpression(left=left, operator=operator, right=right)
+            binary_expr = BinaryExpression(left=left, operator=operator, right=right)
+            binary_expr.line = line
+            binary_expr.column = column
+            left = binary_expr
         
         return left
     
@@ -748,9 +1063,14 @@ class Parser:
         
         while self.current_token and self.current_token.type in (TokenType.PLUS, TokenType.MINUS):
             operator = self.current_token.value
+            line = self.current_token.line if self.current_token else 0
+            column = self.current_token.column if self.current_token else 0
             self.advance()
             right = self.parse_factor()
-            left = BinaryExpression(left=left, operator=operator, right=right)
+            binary_expr = BinaryExpression(left=left, operator=operator, right=right)
+            binary_expr.line = line
+            binary_expr.column = column
+            left = binary_expr
         
         return left
     
@@ -759,9 +1079,14 @@ class Parser:
         
         while self.current_token and self.current_token.type in (TokenType.MULTIPLY, TokenType.DIVIDE, TokenType.MODULO):
             operator = self.current_token.value
+            line = self.current_token.line if self.current_token else 0
+            column = self.current_token.column if self.current_token else 0
             self.advance()
             right = self.parse_unary()
-            left = BinaryExpression(left=left, operator=operator, right=right)
+            binary_expr = BinaryExpression(left=left, operator=operator, right=right)
+            binary_expr.line = line
+            binary_expr.column = column
+            left = binary_expr
         
         return left
     
@@ -772,7 +1097,7 @@ class Parser:
             operand = self.parse_unary()
             return UnaryExpression(operator=operator, operand=operand)
         
-        return self.parse_power()  # 修改：先解析幂运算
+        return self.parse_power()  # Modified: parse power operation first
     
     def parse_postfix(self) -> Expression:
         expr = self.parse_primary()
@@ -783,34 +1108,34 @@ class Parser:
                 arguments = []
                 keyword_arguments = {}
                 
-                # 解析参数列表
+                # Parse parameter list
                 if self.current_token and self.current_token.type != TokenType.RPAREN:
-                    # 检查是否是命名参数 (identifier : expression)
+                    # Check if it's named parameter (identifier : expression)
                     if (self.current_token.type == TokenType.IDENTIFIER and 
                         self.peek_token() and self.peek_token().type == TokenType.COLON):
-                        # 命名参数
+                        # Named parameter
                         param_name = self.current_token.value
-                        self.advance()  # 消费参数名
-                        self.advance()  # 消费冒号
+                        self.advance()  # Consume parameter name
+                        self.advance()  # Consume colon
                         param_value = self.parse_expression()
                         keyword_arguments[param_name] = param_value
                     else:
-                        # 位置参数
+                        # Positional parameter
                         arguments.append(self.parse_expression())
                     
                     while self.current_token and self.current_token.type == TokenType.COMMA:
                         self.advance()
-                        # 继续解析参数，检查是否是命名参数
+                        # Continue parsing parameters, check if it's named parameter
                         if (self.current_token.type == TokenType.IDENTIFIER and 
                             self.peek_token() and self.peek_token().type == TokenType.COLON):
-                            # 命名参数
+                            # Named parameter
                             param_name = self.current_token.value
-                            self.advance()  # 消费参数名
-                            self.advance()  # 消费冒号
+                            self.advance()  # Consume parameter name
+                            self.advance()  # Consume colon
                             param_value = self.parse_expression()
                             keyword_arguments[param_name] = param_value
                         else:
-                            # 位置参数
+                            # Positional parameter
                             arguments.append(self.parse_expression())
                 
                 self.consume_with_filename(TokenType.RPAREN)
@@ -819,8 +1144,11 @@ class Parser:
                     expr = CallExpression(function=expr.name, arguments=arguments, keyword_arguments=keyword_arguments)
                 elif isinstance(expr, MemberExpression):
                     expr = CallExpression(function=f"{expr.object}.{expr.property}", arguments=arguments, keyword_arguments=keyword_arguments)
+                elif isinstance(expr, LambdaExpression):
+                    # Support immediate invocation of anonymous functions, e.g. (lambda x, y -> x + y)(3, 4)
+                    expr = CallExpression(function=expr, arguments=arguments, keyword_arguments=keyword_arguments)
                 else:
-                    raise SyntaxError(f"无效的函数调用")
+                    raise SyntaxError(f"Invalid function call: expected Identifier or MemberExpression, but got {type(expr).__name__}")
             
             elif self.current_token.type == TokenType.DOT:
                 self.advance()
@@ -831,15 +1159,15 @@ class Parser:
                     if isinstance(expr, Identifier):
                         expr = MemberExpression(object=expr.name, property=property_name)
                     elif isinstance(expr, MemberExpression):
-                        # 支持链式调用，如 System.out.print
+                        # Support chained calls, like System.out.print
                         expr = MemberExpression(object=f"{expr.object}.{expr.property}", property=property_name)
                     else:
-                        raise SyntaxError(f"无效的 member 访问")
+                        raise SyntaxError(f"Invalid member access")
                 else:
-                    raise SyntaxError(f"期望标识符在 '.' 后")
+                    raise SyntaxError(f"Expected identifier after '.'")
             elif self.current_token.type == TokenType.LBRACKET:
-                # 处理下标访问，如 a[0], a["key"]
-                self.advance()  # 消费 '['
+                # Handle subscript access, like a[0], a["key"]
+                self.advance()  # Consume '['
                 index_expr = self.parse_expression()
                 self.consume_with_filename(TokenType.RBRACKET)
                 expr = IndexExpression(object=expr, index=index_expr)
@@ -888,69 +1216,110 @@ class Parser:
         elif self.current_token.type == TokenType.LBRACE:
             return self.parse_dict_expression()
         
+        elif self.current_token.type == TokenType.LAMBDA:
+            return self.parse_lambda_expression()
+        
         elif self.current_token.type == TokenType.LPAREN:
-            self.advance()
-            expr = self.parse_expression()
-            self.consume_with_filename(TokenType.RPAREN)
-            return expr
+            return self.parse_tuple_expression()
         
         elif self.current_token.type == TokenType.DIVIDE:
-            # 处理除法运算符
+            # Handle division operator
             operator = self.current_token.value
             self.advance()
             return Identifier(name=operator)
         else:
-            raise SyntaxError(f"意外的标记: {self.current_token.value}")
+            raise SyntaxError(f"Unexpected token: {self.current_token.value}")
+    
+    def parse_lambda_expression(self) -> LambdaExpression:
+        """Parse lambda expression: lambda x, y -> x + y"""
+        self.consume_with_filename(TokenType.LAMBDA)
+        
+        parameters = []
+        if self.current_token and self.current_token.type == TokenType.IDENTIFIER:
+            parameters.append(self.consume_with_filename(TokenType.IDENTIFIER).value)
+            
+            while self.current_token and self.current_token.type == TokenType.COMMA:
+                self.advance()
+                parameters.append(self.consume_with_filename(TokenType.IDENTIFIER).value)
+        
+        self.consume_with_filename(TokenType.ARROW)
+        body = self.parse_expression()
+        
+        return LambdaExpression(parameters=parameters, body=body)
     
     def parse_array_expression(self) -> Expression:
-        """解析数组表达式 [item1, item2, ...]"""
+        """Parse array expression [item1, item2, ...]"""
         self.consume_with_filename(TokenType.LBRACKET)
         elements = []
         
-        # 检查空数组 []
+        # Check empty array []
         if self.current_token and self.current_token.type != TokenType.RBRACKET:
             elements.append(self.parse_expression())
             
-            # 解析剩余的元素
+            # Parse remaining elements
             while self.current_token and self.current_token.type == TokenType.COMMA:
-                self.advance()  # 消费逗号
+                self.advance()  # Consume comma
                 if self.current_token and self.current_token.type != TokenType.RBRACKET:
                     elements.append(self.parse_expression())
         
         self.consume_with_filename(TokenType.RBRACKET)
         return ArrayExpression(elements=elements)
     
-    def parse_dict_expression(self) -> Expression:
-        """解析字典表达式 {key1: value1, key2: value2, ...}"""
-        self.consume_with_filename(TokenType.LBRACE)
-        entries = []  # 使用列表存储键值对
+    def parse_tuple_expression(self) -> Expression:
+        """Parse tuple expression (item1, item2, ...)"""
+        self.consume_with_filename(TokenType.LPAREN)
+        elements = []
         
-        # 跳过初始的换行符（如果有）
+        # Check empty tuple ()
+        if self.current_token and self.current_token.type != TokenType.RPAREN:
+            elements.append(self.parse_expression())
+            
+            # Parse remaining elements
+            while self.current_token and self.current_token.type == TokenType.COMMA:
+                self.advance()  # Consume comma
+                if self.current_token and self.current_token.type != TokenType.RPAREN:
+                    elements.append(self.parse_expression())
+        
+        self.consume_with_filename(TokenType.RPAREN)
+        
+        # If only one element and no comma, return the element itself (not tuple)
+        # This supports immediate invocation of anonymous functions like (lambda x -> x + 1)(5)
+        if len(elements) == 1:
+            return elements[0]
+        
+        return TupleExpression(elements=elements)
+    
+    def parse_dict_expression(self) -> Expression:
+        """Parse dictionary expression {key1: value1, key2: value2, ...}"""
+        self.consume_with_filename(TokenType.LBRACE)
+        entries = []  # Use list to store key-value pairs
+        
+        # Skip initial newline (if any)
         self.skip_newlines()
         
-        # 检查空字典 {}
+        # Check empty dictionary {}
         if self.current_token and self.current_token.type != TokenType.RBRACE:
             key = self.parse_expression()
             self.consume_with_filename(TokenType.COLON)
             value = self.parse_expression()
-            entries.append((key, value))  # 存储为元组
+            entries.append((key, value))  # Store as tuple
             
-            # 解析剩余的键值对
+            # Parse remaining key-value pairs
             while self.current_token and self.current_token.type == TokenType.COMMA:
-                self.advance()  # 消费逗号
-                self.skip_newlines()  # 跳过换行符
+                self.advance()  # Consume comma
+                self.skip_newlines()  # Skip newline
                 if self.current_token and self.current_token.type != TokenType.RBRACE:
                     key = self.parse_expression()
                     self.consume_with_filename(TokenType.COLON)
                     value = self.parse_expression()
-                    entries.append((key, value))  # 存储为元组
+                    entries.append((key, value))  # Store as tuple
         
-        self.skip_newlines()  # 跳过最后的换行符
+        self.skip_newlines()  # Skip final newline
         self.consume_with_filename(TokenType.RBRACE)
         return DictExpression(entries=entries)
 
 def main():
-    # 测试解析器
+    # Test parser
     code = '''
 func main() {
     System.print("Hello World!"):
@@ -963,19 +1332,19 @@ func main() {
     parser = Parser(tokens)
     ast = parser.parse()
     
-    print("\nAST 结构:")
+    print("\nAST Structure:")
     for func in ast.functions:
-        print(f"函数: {func.name}")
+        print(f"Function: {func.name}")
         for stmt in func.body:
-            print(f"  语句: {type(stmt).__name__}")
+            print(f"  Statement: {type(stmt).__name__}")
             if hasattr(stmt, 'expression'):
-                print(f"    表达式: {type(stmt.expression).__name__}")
+                print(f"    Expression: {type(stmt.expression).__name__}")
                 if hasattr(stmt.expression, 'function'):
-                    print(f"    函数: {stmt.expression.function}")
+                    print(f"    Function: {stmt.expression.function}")
                 if hasattr(stmt.expression, 'arguments'):
-                    print(f"    参数: {len(stmt.expression.arguments)}")
+                    print(f"    Arguments: {len(stmt.expression.arguments)}")
                     for i, arg in enumerate(stmt.expression.arguments):
-                        print(f"      参数 {i}: {type(arg).__name__}")
+                        print(f"      Argument {i}: {type(arg).__name__}")
 
 if __name__ == "__main__":
     main()

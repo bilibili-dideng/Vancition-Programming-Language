@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Vanction 编程语言解释器
+Vanction Programming Language Interpreter
 
-一个简单的编程语言，支持函数定义、变量、控制流和内置函数。
+A simple programming language that supports function definitions, variables, control flow, and built-in functions.
 
-示例代码:
+Example code:
 ```vanction
 func main() {
     System.print("Hello World!")
@@ -17,7 +17,7 @@ import os
 import argparse
 from lexer import Lexer
 from parser import Parser
-from interpreter import Interpreter
+from interpreter import Interpreter, VanctionException, VanctionRuntimeError
 
 def run_file(filename: str):
     """Run Vanction source file"""
@@ -30,105 +30,122 @@ def run_file(filename: str):
         tokens = lexer.tokenize()
         
         # Syntax analysis
-        parser = Parser(tokens)
+        parser = Parser(tokens, filename)
         ast = parser.parse()
         
         # Interpret and execute
         interpreter = Interpreter()
-        interpreter.interpret(ast)
+        interpreter.interpret(ast, filename)  # Pass filename parameter
         
     except FileNotFoundError:
         print(f"Error: File '{filename}' not found")
         sys.exit(1)
     except SyntaxError as e:
-        print(f"Syntax Error: {e}")
+        print(f"{e}")
+        sys.exit(1)
+    except VanctionException as e:
+        # VanctionException already contains complete formatted information, output directly
+        print(str(e))
+        sys.exit(1)
+    except VanctionRuntimeError as e:
+        print(str(e))
         sys.exit(1)
     except Exception as e:
         print(f"Runtime Error: {e}")
         sys.exit(1)
 
 def run_repl():
-    """运行交互式解释器"""
-    print("Vanction 编程语言 REPL v1.0")
-    print("输入 'exit' 或 'quit' 退出")
+    """Run interactive interpreter"""
+    print("Vanction Programming Language REPL v1.0")
+    print("Enter 'exit' or 'quit' to exit")
     print("-" * 30)
     
-    current_input = []
-    brace_count = 0
+    # Create a persistent interpreter instance to maintain function and variable definitions
+    interpreter = Interpreter()
     
     while True:
         try:
-            # 确定提示符
-            prompt = "vanction> " if brace_count == 0 else "...> "
+            # Check for input from pipe
+            import sys
+            if not sys.stdin.isatty():
+                # If there's pipe input, read all content at once
+                try:
+                    full_code = sys.stdin.read().strip()
+                    if not full_code:
+                        break
+                    
+                    # Lexical analysis
+                    lexer = Lexer(full_code)
+                    tokens = lexer.tokenize()
+                    
+                    # Syntax analysis
+                    parser = Parser(tokens, "<stdin>")
+                    ast = parser.parse()
+                    
+                    # Use REPL mode to interpret and execute
+                    interpreter.interpret_repl(ast)
+                    break
+                    
+                except SyntaxError as e:
+                    print(f"Syntax error: {e}")
+                    break
+                except Exception as e:
+                    print(f"Runtime error: {e}")
+                    break
             
-            # 读取输入
-            line = input(prompt).strip()
+            # Normal interactive input
+            line = input("vanction> ").strip()
             
             if line.lower() in ['exit', 'quit']:
-                print("再见!")
+                print("Goodbye!")
                 break
             
-            if not line and brace_count == 0:
+            if not line:
                 continue
             
-            # 计算大括号数量
-            brace_count += line.count('{') - line.count('}')
-            current_input.append(line)
-            
-            # 如果还有未闭合的大括号，继续读取
-            if brace_count > 0:
-                continue
-            
-            # 合并所有输入
-            full_code = '\n'.join(current_input)
-            current_input = []
-            
-            # 为每次输入创建新的解释器实例
-            interpreter = Interpreter()
-            
-            # 词法分析
-            lexer = Lexer(full_code)
-            tokens = lexer.tokenize()
-            
-            # 语法分析
-            parser = Parser(tokens)
-            ast = parser.parse()
-            
-            # 解释执行
-            interpreter.interpret(ast)
+            try:
+                # Ensure statement ends with semicolon
+                if not line.endswith(';'):
+                    line = line + ';'
+                
+                # Lexical analysis
+                lexer = Lexer(line)
+                tokens = lexer.tokenize()
+                
+                # Syntax analysis
+                parser = Parser(tokens, "<repl>")
+                ast = parser.parse()
+                
+                # Use REPL mode to interpret and execute
+                interpreter.interpret_repl(ast)
+                
+            except SyntaxError as e:
+                print(f"Syntax error: {e}")
+            except Exception as e:
+                print(f"Runtime error: {e}")
             
         except KeyboardInterrupt:
-            print("\n使用 'exit' 或 'quit' 退出")
-            current_input = []
-            brace_count = 0
+            print("\nUse 'exit' or 'quit' to exit")
         except EOFError:
-            print("\n再见!")
+            print("\nGoodbye!")
             break
-        except SyntaxError as e:
-            print(f"语法错误: {e}")
-            current_input = []
-            brace_count = 0
-        except Exception as e:
-            print(f"运行时错误: {e}")
-            current_input = []
-            brace_count = 0
 
 def main():
-    parser = argparse.ArgumentParser(description='Vanction 编程语言解释器')
-    parser.add_argument('file', nargs='?', help='Vanction源文件')
-    parser.add_argument('--repl', action='store_true', help='运行交互式解释器')
+    parser = argparse.ArgumentParser(description='Vanction Programming Language Interpreter')
+    parser.add_argument('file', nargs='?', help='Vanction source file')
+    parser.add_argument('--repl', action='store_true', help='Run interactive interpreter')
     
     args = parser.parse_args()
     
     if args.repl or not args.file:
         run_repl()
     else:
-        # 检测args.file是否为绝对路径
+        # Check if args.file is absolute path
         if not os.path.isabs(args.file):
-            # 如果是相对路径，转换为相对于当前工作目录的绝对路径
+            # If relative path, convert to absolute path relative to current working directory
             file = os.path.abspath(args.file)
         else:
-            # 如果是绝对路径，直接使用
+            # If absolute path, use directly
             file = args.file
         run_file(file)
 
