@@ -1,141 +1,168 @@
 # Vanction Programming Language
 
-Vanction is a simple and easy-to-learn programming language designed for education and rapid prototyping.
+![Vanction Language](icon/Vanction.ico)
 
-## Features
+Vanction is a modern, versatile scripting language that seamlessly blends functional programming, object-oriented, and procedural paradigms. Designed with simplicity and power in mind, Vanction offers an intuitive syntax while maintaining the capability to handle complex programming tasks.
 
-- **Clean Syntax**: Modern programming language-like syntax, easy to read and write
-- **Function Support**: Support for custom function definitions and calls
-- **Variable System**: Support for variable definition and assignment
-- **Control Flow**: Support for if-else conditional statements and while loops
-- **Built-in Functions**: Provides built-in functions like System.print
-- **Interactive Interpreter**: Supports REPL mode for interactive programming
+## 🌟 Key Features
 
-## Quick Start
+- **Multi-Paradigm Support**: Functional, Object-Oriented, and Procedural programming
+- **Intuitive Syntax**: Clean and readable code structure
+- **Powerful String Processing**: Built-in formatted strings and raw string literals
+- **Comprehensive Control Flow**: if-else-if-else, switch, for, while loops
+- **Exception Handling**: Robust try-catch-finally mechanism
+- **Immutable Variables**: Support for constants and immutable data
+- **Lambda Expressions**: First-class functions and higher-order programming
+- **Rich Built-in Functions**: Extensive standard library
 
-### Installation
+## 🚀 Quick Start
 
-Vanction is a Python-based interpreter that requires no additional installation. Just ensure Python 3.6+ is installed on your system.
+### main
+```vanction
+func main() {
+    System.print("Hello, World!");
+}
+```
 
-### Running Programs
-
+### you can...
 ```bash
-# Run Vanction source file
-python vanction.py examples/hello.va
-
-# Start interactive interpreter
-python vanction.py --repl
+pyinstaller --onefile --icon=icon/Vanction.ico vanction.py 
 ```
 
-## Syntax Examples
-
-### Hello World
-
+### Your First Vanction Program
+Create a file called `hello.va`:
 ```vanction
 func main() {
-    System.print("Hello World!")
+    System.print("Hello, Vanction World!");
+    
+    | Calculate factorial
+    func factorial(n) {
+        if (n <= 1) {
+            return 1;
+        }
+        return n * factorial(n - 1);
+    }
+    
+    result = factorial(5);
+    System.print(f"5! = {result}");
 }
 ```
 
-### Variables and Functions
+Run it:
+```bash
+python vanction.py hello.va
+```
 
+## 📖 Language Highlights
+
+### Variables and Constants
 ```vanction
-func greet(name) {
-    System.print("Hello, " + name + "!")
-}
+| Regular variables
+name = "Vanction";
+version = 2.0;
 
-func main() {
-    message = "Vanction Language"
-    version = 1.0
-    
-    System.print(message)
-    System.print("Version:", version)
-    
-    greet("World")
-}
+| Immutable variables
+immut pi = 3.14159;
+
+| Compile-time constants
+define MAX_SIZE 100;
+```
+
+### String Magic
+```vanction
+| Formatted strings
+name = "Vanction";
+greeting = f"Welcome to {name} version {version}!";
+
+| Raw strings (no escape processing)
+path = $"C:\\Users\\Developer\\Project";
 ```
 
 ### Control Flow
-
 ```vanction
-func main() {
-    # if-else conditional statements
-    age = 18
-    if age >= 18 {
-        System.print("You are an adult")
-    } else {
-        System.print("You are a minor")
+| For loops
+for (i in range(5)) {
+    System.print(f"Count: {i}");
+}
+
+| Switch statements
+switch day {
+    case "Monday" {
+        System.print("Start of work week");
     }
-    
-    score = 85
-    if (score >= 90) {
-        System.print("Grade: A")
-    } else-if (score >= 80) {
-        System.print("Grade: B")
-    } else-if (score >= 70) {
-        System.print("Grade: C")
-    } else {
-        System.print("Grade: F")
+    case "Friday" {
+        System.print("Almost weekend!");
     }
-    
-    # while loop
-    counter = 0
-    while counter < 5 {
-        System.print("Counter:", counter)
-        counter = counter + 1
+    default {
+        System.print("Regular day");
     }
 }
 ```
 
-### Function Return Values
-
+### Functions and Lambdas
 ```vanction
+| Regular functions
 func add(a, b) {
-    return a + b
+    return a + b;
 }
 
-func main() {
-    result = add(5, 3)
-    System.print("5 + 3 =", result)
+| Lambda expressions
+square = (x) -> x * x;
+double = (x) -> x * 2;
+
+| Higher-order functions
+func apply_operation(numbers, operation) {
+    result = [];
+    for (n in numbers) {
+        result.append(operation(n));
+    }
+    return result;
 }
 ```
 
-## Language Features
+### Exception Handling
+```vanction
+try {
+    result = 10 / 0;
+} catch (error) {
+    System.print(f"Error caught: {error}");
+} finally {
+    System.print("Cleanup complete");
+}
+```
 
-### Data Types
+## 📚 Documentation
 
-- **Numbers**: Integers and floating-point numbers (1, 3.14)
-- **Strings**: Text enclosed in double quotes ("Hello")
-- **Booleans**: Obtained through comparison operations (true/false)
+- **[Complete Language Reference](doc/language_reference_en.md)** - Comprehensive guide to all Vanction features
+- **[语言参考手册 (中文)](doc/language_reference_zh.md)** - 中文完整语言参考
 
-### Operators
+## 🛠️ Project Structure
 
-- **Arithmetic Operators**: +, -, *, /
-- **Comparison Operators**: ==, !=, <, >, <=, >=
-- **Logical Operators**: and, or
-- **Assignment Operators**: =
+```
+Vanction-Language/
+├── vanction.py          # Main interpreter entry point
+├── lexer.py            # Lexical analyzer
+├── parser.py           # Syntax parser
+├── interpreter.py      # Runtime interpreter
+├── doc/                # Documentation
+│   ├── language_reference_en.md
+│   └── language_reference_zh.md
+├── icon/               # Project icons
+└── README.md           # This file
 
-### Built-in Functions
+```
+## 📝 License
 
-- `System.print(...)`: Print output, supports multiple parameters
-- `len(string)`: Get string length
-- `str(value)`: Convert to string
-- `int(value)`: Convert to integer
-- `float(value)`: Convert to float
-- `System.input(...)`: Get user input
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Extension Features
+## 🎯 Roadmap
 
-Vanction language is designed to be easily extensible. New features can be added through:
+- [ ] Object-oriented programming support
+- [ ] Module system
+- [ ] Standard library expansion
+- [ ] Performance optimizations
+- [ ] IDE plugins
+- [ ] Package manager
+---
 
-1. **Adding New Built-in Functions**: Add in the `setup_builtin_functions` method in `interpreter.py`
-2. **Adding New Syntax**: Extend `lexer.py` and `parser.py` to support new syntax structures
-3. **Adding New Operators**: Implement new operators in `parser.py` and `interpreter.py`
-
-## Contributing
-
-Issues and Pull Requests are welcome to improve the Vanction language!
-
-## License
-
-MIT License - See LICENSE file for details
+**Happy Coding with Vanction!** 🎉
