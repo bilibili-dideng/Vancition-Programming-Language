@@ -169,6 +169,7 @@ class Identifier(Expression):
 @dataclass
 class Literal(Expression):
     value: Union[str, int, float, bool] = None
+    is_format_string: bool = False
     
     def __post_init__(self):
         super().__post_init__()
@@ -1204,6 +1205,16 @@ class Parser:
                 return Literal(value=int(value))
         
         elif self.current_token.type == TokenType.STRING:
+            value = self.current_token.value
+            self.advance()
+            return Literal(value=value)
+        
+        elif self.current_token.type == TokenType.FORMAT_STRING:
+            value = self.current_token.value
+            self.advance()
+            return Literal(value=value, is_format_string=True)
+        
+        elif self.current_token.type == TokenType.RAW_STRING:
             value = self.current_token.value
             self.advance()
             return Literal(value=value)

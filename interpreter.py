@@ -9,7 +9,7 @@ from parser import (Program, FunctionDef, Statement, Expression, ExpressionState
                     BinaryExpression, UnaryExpression, CallExpression, MemberExpression,
                     Identifier, Literal, ArrayExpression, DictExpression, IndexExpression,
                     BreakStatement, ContinueStatement, ImportStatement, Parser,
-                    SwitchStatement, CaseStatement, TupleExpression, TryStatement, 
+                    SwitchStatement, CaseStatement, TupleExpression, TryStatement,
                     ThrowStatement, LambdaExpression, MultiAssignmentExpression)
 
 class VanctionRuntimeError(Exception):
@@ -125,6 +125,14 @@ class Environment:
             return self.parent.get(name)
         else:
             raise VanctionUndefinedError(name, "variable")
+    
+    def has_variable(self, name: str) -> bool:
+        """Check if variable exists in this environment or parent environments"""
+        if name in self.variables or name in self.constants:
+            return True
+        if self.parent:
+            return self.parent.has_variable(name)
+        return False
     
     def set(self, name: str, value: Any, file: str = "", line: int = 0, column: int = 0):
         # Check if it's a constant in current environment
@@ -1055,13 +1063,20 @@ class Interpreter:
     
     def evaluate_expression(self, expr: Expression, env: Environment) -> Any:
         if isinstance(expr, Literal):
+            if expr.is_format_string:
+                # Handle format string
+                result = self.evaluate_format_string(expr.value, env)
+                return result
             return expr.value
         
         elif isinstance(expr, Identifier):
             value = env.get(expr.name)
             # Check if value is of type AnytionType
             if isinstance(value, AnytionType):
-                raise VanctionAnytionError(self.current_file, getattr(expr, 'line', 0), getattr(expr, 'column', 0))
+                # Allow getting anytion value only if it's the special "anytion" variable
+                # This allows assignments like "name = anytion" but prevents using anytion in expressions
+                if expr.name != "anytion":
+                    raise VanctionAnytionError(self.current_file, getattr(expr, 'line', 0), getattr(expr, 'column', 0))
             return value
         
         elif isinstance(expr, UnaryExpression):
@@ -1091,13 +1106,11 @@ class Interpreter:
                 if isinstance(expr.left, Identifier):
                     var_name = expr.left.name
                     value = self.evaluate_expression(expr.right, env)
-                    # If variable exists, use set to update; otherwise use define to create
-                    try:
+                    # Check if variable exists without getting its value (to avoid anytion error)
+                    if env.has_variable(var_name):
+                        # Variable exists, update it
                         env.set(var_name, value, self.current_file, getattr(expr, 'line', 0), getattr(expr, 'column', 0))
-                    except VanctionImmutableError:
-                        # Re-raise immutable error
-                        raise
-                    except VanctionRuntimeError:
+                    else:
                         # Variable doesn't exist, create new variable
                         # Check if this is a constant assignment
                         is_constant = getattr(expr, 'is_constant', False)
@@ -1109,8 +1122,8 @@ class Interpreter:
             left = self.evaluate_expression(expr.left, env)
             right = self.evaluate_expression(expr.right, env)
             
-            # Check for anytion values
-            if isinstance(left, AnytionType) or isinstance(right, AnytionType):
+            # Check for anytion values - only for non-assignment operations
+            if expr.operator != '=' and (isinstance(left, AnytionType) or isinstance(right, AnytionType)):
                 raise VanctionAnytionError(self.current_file, getattr(expr, 'line', 0), getattr(expr, 'column', 0))
             
             # Check for unassigned values (None)
@@ -1452,6 +1465,26 @@ class Interpreter:
                     return builtin_func(*arguments)
                 else:
                     raise VanctionUndefinedError(function_name, "function")
+    
+    def evaluate_format_string(self, format_string: str, env: Environment) -> str:
+        """Evaluate format string with variable substitution"""
+        import re
+        
+        # Replace {{var}} patterns with actual variable values
+        def replace_var(match):
+            var_name = match.group(1)
+            try:
+                value = env.get(var_name)
+                # Check if value is AnytionType - if so, return a placeholder
+                if isinstance(value, AnytionType):
+                    return "<anytion>"
+                return str(value)
+            except VanctionUndefinedError:
+                return f"{{{var_name}}}"  # Keep original if variable not found
+        
+        # Replace all {{var}} patterns
+        result = re.sub(r'\{\{([^}]+)\}\}', replace_var, format_string)
+        return result
     
     def is_truthy(self, value: Any) -> bool:
         if value is None:

@@ -29,6 +29,8 @@ class TokenType(Enum):
     # Identifiers and literals
     IDENTIFIER = 'IDENTIFIER'
     STRING = 'STRING'
+    FORMAT_STRING = 'FORMAT_STRING'  # f"..." strings
+    RAW_STRING = 'RAW_STRING'        # $"..." raw strings
     NUMBER = 'NUMBER'
     
     # Operators
@@ -213,12 +215,106 @@ class Lexer:
                     value += '\\'
                 elif escape_char == delimiter:
                     value += delimiter
+                elif escape_char == 'u':  # Unicode escape \uXXXX
+                    self.advance()
+                    unicode_hex = ''
+                    for i in range(4):
+                        if self.current_char() in '0123456789abcdefABCDEF':
+                            unicode_hex += self.current_char()
+                            self.advance()
+                        else:
+                            break
+                    if len(unicode_hex) == 4:
+                        try:
+                            unicode_char = chr(int(unicode_hex, 16))
+                            value += unicode_char
+                            continue
+                        except ValueError:
+                            value += '\\u' + unicode_hex
+                    else:
+                        value += '\\u' + unicode_hex
+                    continue
                 else:
                     value += escape_char
                 self.advance()
             else:
                 value += self.current_char()
                 self.advance()
+        
+        if self.current_char() == delimiter:
+            self.advance()  # Skip closing quote
+        
+        return value
+    
+    def read_format_string(self, delimiter: str = '"') -> str:
+        """Read format string (f"...") with variable substitution"""
+        value = ''
+        self.advance()  # Skip opening quote
+        
+        while self.current_char() != delimiter and self.current_char() != '\0':
+            if self.current_char() == '{':
+                self.advance()  # Skip {
+                var_name = ''
+                while self.current_char() != '}' and self.current_char() != '\0':
+                    var_name += self.current_char()
+                    self.advance()
+                if self.current_char() == '}':
+                    self.advance()  # Skip }
+                    value += f'{{{{{var_name.strip()}}}}}'  # Store as {{var}} for later processing
+                else:
+                    value += '{' + var_name
+            elif self.current_char() == '\\':
+                self.advance()
+                escape_char = self.current_char()
+                if escape_char == 'n':
+                    value += '\n'
+                elif escape_char == 't':
+                    value += '\t'
+                elif escape_char == 'r':
+                    value += '\r'
+                elif escape_char == '\\':
+                    value += '\\'
+                elif escape_char == delimiter:
+                    value += delimiter
+                elif escape_char == 'u':  # Unicode escape \uXXXX
+                    self.advance()
+                    unicode_hex = ''
+                    for i in range(4):
+                        if self.current_char() in '0123456789abcdefABCDEF':
+                            unicode_hex += self.current_char()
+                            self.advance()
+                        else:
+                            break
+                    if len(unicode_hex) == 4:
+                        try:
+                            unicode_char = chr(int(unicode_hex, 16))
+                            value += unicode_char
+                            continue
+                        except ValueError:
+                            value += '\\u' + unicode_hex
+                    else:
+                        value += '\\u' + unicode_hex
+                    continue
+                else:
+                    value += escape_char
+                self.advance()
+            else:
+                value += self.current_char()
+                self.advance()
+        
+        if self.current_char() == delimiter:
+            self.advance()  # Skip closing quote
+        
+        return value
+    
+    def read_raw_string(self, delimiter: str = '"') -> str:
+        """Read raw string ($"...") without escape processing"""
+        value = ''
+        self.advance()  # Skip opening quote
+        
+        while self.current_char() != delimiter and self.current_char() != '\0':
+            value += self.current_char()
+            self.advance()
         
         if self.current_char() == delimiter:
             self.advance()  # Skip closing quote
@@ -268,7 +364,23 @@ class Lexer:
                 self.advance()
                 continue
             
-            # Handle string
+            # Handle format string (f"...")
+            if self.current_char() == 'f' and (self.peek_char() == '"' or self.peek_char() == "'"):
+                delimiter = self.peek_char()
+                self.advance()  # Skip f
+                value = self.read_format_string(delimiter)
+                self.tokens.append(Token(TokenType.FORMAT_STRING, value, line, column))
+                continue
+            
+            # Handle raw string ($"...")
+            if self.current_char() == '$' and (self.peek_char() == '"' or self.peek_char() == "'"):
+                delimiter = self.peek_char()
+                self.advance()  # Skip $
+                value = self.read_raw_string(delimiter)
+                self.tokens.append(Token(TokenType.RAW_STRING, value, line, column))
+                continue
+            
+            # Handle regular string
             if self.current_char() == '"' or self.current_char() == "'":
                 value = self.read_string(self.current_char())
                 self.tokens.append(Token(TokenType.STRING, value, line, column))
