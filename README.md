@@ -155,14 +155,4 @@ Vanction-Language/
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🎯 Roadmap
-
-- [ ] Object-oriented programming support
-- [ ] Module system
-- [ ] Standard library expansion
-- [ ] Performance optimizations
-- [ ] IDE plugins
-- [ ] Package manager
----
-
 **Happy Coding with Vanction!** 🎉
